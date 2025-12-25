@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+
+# Git
+.git/
+.gitignore
+
+# Not needed in prod
+notebooks/
+plots/
+*.ipynb
+
+# Large files
+*.pth
+*.pt
+
+# OS
+.DS_Store
