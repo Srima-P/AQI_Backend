@@ -1,60 +1,57 @@
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query
+from app.csv_manager import update_all_city_csv
+from app.predictor import predict_city, predict_latlon
+from app.waqi import fetch_city_aqi, fetch_online_aqi_latlon
+from app.health import health_recommendation
 
-from app.model import load_model
-from app.predict import predict_city, predict_latlon
-from app.plot import plot_wave
-from app.waqi import fetch_online_aqi, fetch_online_aqi_latlon
+app = FastAPI(title="AQI Prediction Backend")
 
-app = FastAPI(title="AQI Prediction API")
-model = load_model()
 
-# ===============================
-# CITY-BASED PREDICTION
-# ===============================
+# ---------------- STARTUP ----------------
+@app.on_event("startup")
+def startup():
+    update_all_city_csv()
+
+
+# ---------------- MANUAL UPDATE ----------------
+@app.get("/update/all")
+def manual_update():
+    update_all_city_csv()
+    return {"status": "All cities update triggered"}
+
+
+# ---------------- CITY PREDICTION ----------------
 @app.get("/predict/city")
-def predict_by_city(city: str = Query(..., description="City name")):
-    current = fetch_online_aqi(city)
+def predict_by_city(city: str):
+    current = fetch_city_aqi(city)
 
-    dates, actual, predicted, next_day = predict_city(model, city)
-    plot_path = plot_wave(city, dates, actual, predicted, next_day)
+    history, next_day = predict_city(city)
 
-    return format_response(city, current, next_day, plot_path)
-
-
-# ===============================
-# GPS-BASED PREDICTION
-# ===============================
-@app.get("/predict/gps")
-def predict_by_gps(
-    lat: float = Query(..., description="Latitude"),
-    lon: float = Query(..., description="Longitude")
-):
-    current = fetch_online_aqi_latlon(lat, lon)
-
-    city, dates, actual, predicted, next_day = predict_latlon(model, lat, lon)
-    plot_path = plot_wave(city, dates, actual, predicted, next_day)
-
-    return format_response(city, current, next_day, plot_path)
-
-
-# ===============================
-# COMMON RESPONSE FORMAT
-# ===============================
-def format_response(city, current, next_day, plot_path):
-    if next_day <= 50:
-        quality = "Good"
-        advice = "Safe for outdoor activities"
-    elif next_day <= 100:
-        quality = "Moderate"
-        advice = "Limit outdoor exposure"
-    else:
-        quality = "Unhealthy"
-        advice = "Avoid outdoor activities"
+    next_day = int(float(next_day))
 
     return {
         "city": city,
-        "predicted_next_day_aqi": round(float(next_day), 2),
-        "air_quality": quality,
-        "health_advice": advice,
-        "plot_path": plot_path
+        "current_aqi": current,
+        "predicted_next_day": next_day,
+        "health": health_recommendation(next_day),
+    }
+
+
+# ---------------- GPS PREDICTION ----------------
+@app.get("/predict/gps")
+def predict_by_gps(
+    lat: float = Query(...),
+    lon: float = Query(...)
+):
+    current = fetch_online_aqi_latlon(lat, lon)
+
+    city, history, next_day = predict_latlon(lat, lon)
+
+    next_day = int(float(next_day))
+
+    return {
+        "nearest_city": city,
+        "current_aqi": current,
+        "predicted_next_day": next_day,
+        "health": health_recommendation(next_day),
     }
