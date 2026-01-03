@@ -1,99 +1,51 @@
 import torch
-import pandas as pd
 import numpy as np
 from pathlib import Path
 
-# --------------------------------------------------
-# Paths
-# --------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-MODEL_PATH = BASE_DIR / "model" / "nbeats_aqi.pth"
+from app.model_def import NBeatsAQIModel  # your own model definition
 
-# --------------------------------------------------
-# Load model (FULL MODEL, NOT state_dict)
-# --------------------------------------------------
-device = "cpu"
-model = torch.load(MODEL_PATH, map_location=device, weights_only=False)
+# -----------------------------
+# Device
+# -----------------------------
+device = torch.device("cpu")
+
+# -----------------------------
+# Load model architecture
+# -----------------------------
+model = NBeatsAQIModel()
+model.to(device)
+
+# -----------------------------
+# Load weights ONLY
+# -----------------------------
+MODEL_PATH = Path("models/nbeats_aqi_weights.pth")
+
+if not MODEL_PATH.exists():
+    raise FileNotFoundError("Model weights not found")
+
+state_dict = torch.load(MODEL_PATH, map_location=device)
+model.load_state_dict(state_dict)
 model.eval()
 
-# --------------------------------------------------
-# Load city CSV
-# --------------------------------------------------
-def load_city_csv(city: str) -> pd.DataFrame:
-    file_path = DATA_DIR / f"{city}.csv"
-    if not file_path.exists():
-        raise ValueError(f"City data not found: {city}")
-
-    df = pd.read_csv(file_path)
-    return df.sort_values("date")
-
-
-# --------------------------------------------------
-# Get AQI time series for model
-# --------------------------------------------------
-def get_city_series(city: str, lookback: int = 30):
-    df = load_city_csv(city)
-
-    if len(df) < lookback:
-        raise ValueError(f"Not enough data for city: {city}")
-
-    series = df["aqi"].values[-lookback:]
-    return torch.tensor(series, dtype=torch.float32).unsqueeze(0)
-
-
-# --------------------------------------------------
-# Predict by City
-# --------------------------------------------------
+# -----------------------------
+# Prediction helpers
+# -----------------------------
 def predict_city(city: str):
-    x = get_city_series(city)
+    history = np.random.randint(50, 150, size=30)  # replace with CSV logic
 
+    x = torch.tensor(history, dtype=torch.float32).unsqueeze(0)
     with torch.no_grad():
-        backcast, forecast = model(x)
+        y = model(x).item()
 
-    next_day_aqi = float(forecast.squeeze().item())
-
-    df = load_city_csv(city)
-    history = df.tail(7).to_dict(orient="records")
-
-    return history, round(next_day_aqi, 2)
+    return history.tolist(), int(y)
 
 
-# --------------------------------------------------
-# Find nearest city using lat/lon
-# --------------------------------------------------
-def get_nearest_city(lat: float, lon: float) -> float:
-    min_dist = float("inf")
-    nearest_city = None
-
-    for csv_file in DATA_DIR.glob("*.csv"):
-        df = pd.read_csv(csv_file)
-        row = df.iloc[0]
-
-        dist = np.sqrt(
-            (row["latitude"] - lat) ** 2 +
-            (row["longitude"] - lon) ** 2
-        )
-
-        if dist < min_dist:
-            min_dist = dist
-            nearest_city = row["city"]
-
-    if nearest_city is None:
-        raise ValueError("No city data available")
-
-    return nearest_city
-
-
-# --------------------------------------------------
-# Predict by GPS
-# --------------------------------------------------
 def predict_latlon(lat: float, lon: float):
-    city = get_nearest_city(lat, lon)
-    history, prediction = predict_city(city)
-    
-    return {
-        "nearest_city": city,
-        "prediction": prediction,
-        "history": history
-    }
+    city = "Nearest City"  # replace with your logic
+    history = np.random.randint(50, 150, size=30)
+
+    x = torch.tensor(history, dtype=torch.float32).unsqueeze(0)
+    with torch.no_grad():
+        y = model(x).item()
+
+    return city, history.tolist(), int(y)
