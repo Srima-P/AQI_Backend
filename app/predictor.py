@@ -1,51 +1,45 @@
+import os
 import torch
 import numpy as np
-from pathlib import Path
+import pandas as pd
+from nbeats_pytorch.model import NBeatsNet
 
-from app.model_def import NBeatsAQIModel  # your own model definition
+DEVICE = torch.device("cpu")
 
-# -----------------------------
-# Device
-# -----------------------------
-device = torch.device("cpu")
+model = NBeatsNet(
+    stack_types=(NBeatsNet.GENERIC_BLOCK,),
+    nb_blocks_per_stack=3,
+    forecast_length=1,
+    backcast_length=30,
+    hidden_layer_units=128,
+)
 
-# -----------------------------
-# Load model architecture
-# -----------------------------
-model = NBeatsAQIModel()
-model.to(device)
+model.load_state_dict(
+    torch.load("model/nbeats_state_dict.pth", map_location=DEVICE)
+)
 
-# -----------------------------
-# Load weights ONLY
-# -----------------------------
-MODEL_PATH = Path("models/nbeats_aqi_weights.pth")
-
-if not MODEL_PATH.exists():
-    raise FileNotFoundError("Model weights not found")
-
-state_dict = torch.load(MODEL_PATH, map_location=device)
-model.load_state_dict(state_dict)
 model.eval()
 
-# -----------------------------
-# Prediction helpers
-# -----------------------------
+
 def predict_city(city: str):
-    history = np.random.randint(50, 150, size=30)  # replace with CSV logic
+    df = pd.read_csv(CSV_PATH)
+    city_df = df[df["city"].str.lower() == city.lower()].tail(30)
 
-    x = torch.tensor(history, dtype=torch.float32).unsqueeze(0)
+    if len(city_df) < 30:
+        raise ValueError("Not enough data for prediction")
+
+    series = torch.tensor(
+        city_df["aqi"].values, dtype=torch.float32
+    ).unsqueeze(0).to(DEVICE)
+
     with torch.no_grad():
-        y = model(x).item()
+        forecast = model(series)[0][0].item()
 
-    return history.tolist(), int(y)
+    return round(float(forecast), 2)
 
 
 def predict_latlon(lat: float, lon: float):
-    city = "Nearest City"  # replace with your logic
-    history = np.random.randint(50, 150, size=30)
-
-    x = torch.tensor(history, dtype=torch.float32).unsqueeze(0)
-    with torch.no_grad():
-        y = model(x).item()
-
-    return city, history.tolist(), int(y)
+    df = pd.read_csv(CSV_PATH)
+    df["dist"] = (df["latitude"] - lat) ** 2 + (df["longitude"] - lon) ** 2
+    nearest_city = df.sort_values("dist").iloc[-30:]["city"].iloc[0]
+    return predict_city(nearest_city)

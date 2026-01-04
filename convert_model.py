@@ -1,16 +1,15 @@
+# convert_model.py
 import torch
-from nbeats_pytorch.model import NBeatsNet
 
-# 🔹 path to your FULL model (current broken one)
-FULL_MODEL_PATH = "nbeats_aqi.pth"
+OLD_MODEL_PATH = "model/nbeats_aqi.pth"
+NEW_MODEL_PATH = "model/nbeats_state_dict.pth"
+DEVICE = torch.device("cpu")
 
-# 🔹 output weights-only model
-WEIGHTS_PATH = "nbeats_aqi_weights.pth"
+# Load FULL model (not state_dict)
+model = torch.load(OLD_MODEL_PATH, map_location=DEVICE)
 
-# load full model
-model = torch.load(FULL_MODEL_PATH, map_location="cpu")
+# Save ONLY state_dict
+torch.save(model.state_dict(), NEW_MODEL_PATH)
 
-# save only weights
-torch.save(model.state_dict(), WEIGHTS_PATH)
-
-print("✅ Model successfully converted to weights-only format")
+print("✅ Conversion successful!")
+print(f"Saved state_dict at: {NEW_MODEL_PATH}")
