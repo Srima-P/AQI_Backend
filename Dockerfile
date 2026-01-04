@@ -14,4 +14,4 @@ RUN pip install torch==2.1.2+cpu -f https://download.pytorch.org/whl/torch_stabl
 
 COPY . .
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python","main.py"]
