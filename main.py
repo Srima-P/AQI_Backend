@@ -1,3 +1,5 @@
+import os
+import uvicorn
 from fastapi import FastAPI, Query
 from app.csv_manager import update_all_city_csv
 from app.predictor import predict_city, predict_latlon
@@ -55,3 +57,6 @@ def predict_by_gps(
         "predicted_next_day": next_day,
         "health": health_recommendation(next_day),
     }
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
