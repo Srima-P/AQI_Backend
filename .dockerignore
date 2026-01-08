@@ -14,9 +14,5 @@ notebooks/
 plots/
 *.ipynb
 
-# Large files
-*.pth
-*.pt
-
 # OS
 .DS_Store
