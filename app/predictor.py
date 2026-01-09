@@ -9,7 +9,7 @@ MODEL_PATH = "model/nbeats_state_dict.pth"
 
 # Load model once globally
 device = torch.device("cpu")
-model = NBeatsAQIModel(load_from_saved=True)
+model = NBeatsAQIModel()
 
 # Load weights
 if os.path.exists(MODEL_PATH):
