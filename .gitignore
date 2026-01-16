@@ -1,11 +1,95 @@
-# Virtual environment
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
 .venv/
 venv/
+ENV/
+env/
 
-# Python cache
-__pycache__/
-*.pyc
+# Environment Variables
+.env
+.env.local
+.env.*.local
+*.env
 
-# OS files
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Database (if testing locally)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# PyTorch
+*.pth.tar
+*.ckpt
+
+# Data files (optional - if you don't want to commit CSVs)
+data/*.csv
+ *.csv
+
+# Model checkpoints (if you have temporary training files)
+# model/temp/
+# model/*.tmp
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+temp/
+tmp/
+
+# Railway (Railway CLI config)
+.railway/
+
+# Migration script (optional - only needed once)
+migrate_csv_to_db.py
