@@ -1,8 +1,10 @@
-from sqlalchemy import create_engine, Column, Integer, String, Date
+from sqlalchemy import create_engine, Column, Integer, String, Date, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 import sys
+from dotenv import load_dotenv
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -29,7 +31,7 @@ try:
         id = Column(Integer, primary_key=True, index=True)
         date = Column(Date, nullable=False, index=True)
         city = Column(String, nullable=False, index=True)
-        aqi = Column(Integer, nullable=False)
+        aqi = Column(Float, nullable=False)
         source = Column(String, nullable=False)
 
     # Create tables
