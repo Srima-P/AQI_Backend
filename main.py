@@ -43,17 +43,17 @@ def predict_by_gps(
     lat: float = Query(...),
     lon: float = Query(...)
 ):
-    current = fetch_online_aqi_latlon(lat, lon)
     city, history, next_day = predict_latlon(lat, lon)
-    
+
+    # Get current AQI from YOUR DATABASE instead of WAQI
+    current = history[-1] if history else None
+
     return {
         "nearest_city": city,
-        "current_aqi": current,
+        "current_aqi": int(current) if current else None,
         "predicted_next_day": int(next_day),
         "health": health_recommendation(next_day),
     }
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+__name__ == "__main__":
+port = int(os.environ.get("PORT", 8000))
+uvicorn.run("main:app", host="0.0.0.0", port=port)
