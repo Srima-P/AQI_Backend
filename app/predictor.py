@@ -1,92 +1,147 @@
 import os
-import numpy as np
-import torch
-from app.model_def import NBeatsAQIModel
-from app.db_manager import get_city_history, CITY_COORDS
-from math import radians, cos, sin, asin, sqrt
+import requests
+from dotenv import load_dotenv
 
-MODEL_PATH = "model/nbeats_state_dict.pth"
+load_dotenv()
 
-# Load model once globally
-device = torch.device("cpu")
-model = NBeatsAQIModel()
+# ✅ Correct env variable
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
-if os.path.exists(MODEL_PATH):
-    try:
-        state_dict = torch.load(MODEL_PATH, map_location=device, weights_only=False)
-        model.load_state_dict(state_dict, strict=False)
-        model.eval()
-        print("✅ Model loaded successfully")
-    except Exception as e:
-        print(f"⚠️ Model loading failed: {e}")
-        model = None
+if not OPENWEATHER_API_KEY:
+    print("❌ ERROR: OPENWEATHER_API_KEY not found in .env file!")
 else:
-    print(f"⚠️ Model file not found at {MODEL_PATH}")
-    model = None
+    print(f"🔑 Using API Key: {OPENWEATHER_API_KEY[:10]}...")
 
-def predict_city(city: str):
-    """Predict next-day AQI using database history"""
-    
-    # Get history from database
-    history = get_city_history(city, days=30)
-    
-    if len(history) < 7:
-        raise ValueError(f"Not enough data for {city}. Need at least 7 days, have {len(history)}.")
-    
-    # Pad if needed
-    if len(history) < 30:
-        mean_aqi = np.mean(history)
-        history = [mean_aqi] * (30 - len(history)) + history
-        print(f"⚠️ Padded {city} history to 30 days")
-    
-    # Use model if available
-    if model is not None:
-        try:
-            input_data = np.array(history[-30:], dtype=np.float32)
-            mean_val = input_data.mean()
-            std_val = input_data.std()
-            
-            if std_val < 1e-8:
-                std_val = 1.0
-            
-            normalized = (input_data - mean_val) / std_val
-            x = torch.tensor(normalized, dtype=torch.float32).unsqueeze(0)
-            
-            with torch.no_grad():
-                pred_normalized = model(x).item()
-            
-            next_day = pred_normalized * std_val + mean_val
-            next_day = int(max(0, min(500, next_day)))
-            
-            print(f"🔮 Model prediction for {city}: Current avg={mean_val:.1f}, Predicted={next_day}")
-            return history, next_day
-            
-        except Exception as e:
-            print(f"⚠️ Model prediction failed for {city}: {e}")
-    
-    # Fallback: weighted average
-    weights = np.exp(np.linspace(-1, 0, min(7, len(history))))
-    weights /= weights.sum()
-    next_day = int(np.average(history[-len(weights):], weights=weights))
-    
-    print(f"📊 Fallback prediction for {city}: {next_day}")
-    return history, next_day
+# City coordinates
+CITY_COORDS = {
+    "Chennai": (13.0827, 80.2707),
+    "Coimbatore": (11.0168, 76.9558),
+    "Madurai": (9.9252, 78.1198),
+    "Salem": (11.6643, 78.1460),
+    "Trichy": (10.7905, 78.7047),
+    "Thanjavur": (10.7867, 79.1378),
+    "Tirunelveli": (8.7139, 77.7567),
+    "Vellore": (12.9165, 79.1325),
+    "Thoothukudi": (8.7642, 78.1348),
+    "Erode": (11.3410, 77.7172),
+    "Karur": (10.9601, 78.0766),
+    "Dindigul": (10.3624, 77.9695),
+    "Kanchipuram": (12.8342, 79.7036),
+    "Nagercoil": (8.1833, 77.4119),
+    "Ooty": (11.4102, 76.6950),
+}
 
-def predict_latlon(lat: float, lon: float):
-    """Predict AQI for GPS location"""
-    def haversine(lat1, lon1, lat2, lon2):
-        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        a = sin(dlat/2)**2 + cos(lat1)*cos(lat2)*sin(dlon/2)**2
-        return 6371 * 2 * asin(sqrt(a))
-    
-    nearest_city = min(
-        CITY_COORDS.items(),
-        key=lambda x: haversine(lat, lon, x[1][0], x[1][1])
-    )[0]
-    
-    print(f"📍 Nearest city for ({lat}, {lon}): {nearest_city}")
-    
-    history, next_day = predict_city(nearest_city)
-    return nearest_city, history, next_day
+def calculate_aqi_from_pm25(pm25):
+    if pm25 <= 12.0:
+        return int((50 / 12.0) * pm25)
+    elif pm25 <= 35.4:
+        return int(50 + ((100 - 50) / (35.4 - 12.1)) * (pm25 - 12.1))
+    elif pm25 <= 55.4:
+        return int(100 + ((150 - 100) / (55.4 - 35.5)) * (pm25 - 35.5))
+    elif pm25 <= 150.4:
+        return int(150 + ((200 - 150) / (150.4 - 55.5)) * (pm25 - 55.5))
+    elif pm25 <= 250.4:
+        return int(200 + ((300 - 200) / (250.4 - 150.5)) * (pm25 - 150.5))
+    else:
+        return int(300 + ((500 - 300) / (500.4 - 250.5)) * (pm25 - 250.5))
+
+
+def predict_city(city_name):
+    try:
+        if city_name not in CITY_COORDS:
+            return None, None
+
+        lat, lon = CITY_COORDS[city_name]
+
+        # Current AQI
+        current_url = (
+            f"http://api.openweathermap.org/data/2.5/air_pollution?"
+            f"lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}"
+        )
+
+        current_res = requests.get(current_url, timeout=10)
+        if current_res.status_code != 200:
+            print(current_res.text)
+            return None, None
+
+        data = current_res.json()
+        pm25 = data["list"][0]["components"]["pm2_5"]
+        current_aqi = calculate_aqi_from_pm25(pm25)
+
+        # Forecast AQI
+        forecast_url = (
+            f"http://api.openweathermap.org/data/2.5/air_pollution/forecast?"
+            f"lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}"
+        )
+
+        forecast_res = requests.get(forecast_url, timeout=10)
+
+        if forecast_res.status_code == 200:
+            forecast_data = forecast_res.json()
+            if len(forecast_data["list"]) >= 24:
+                tomorrow_pm25 = forecast_data["list"][24]["components"]["pm2_5"]
+                predicted_aqi = calculate_aqi_from_pm25(tomorrow_pm25)
+            else:
+                predicted_aqi = current_aqi + 5
+        else:
+            predicted_aqi = current_aqi + 5
+
+        return [current_aqi], predicted_aqi
+
+    except Exception as e:
+        print("Error:", e)
+        return None, None
+
+
+def predict_latlon(lat, lon):
+    try:
+        current_url = (
+            f"http://api.openweathermap.org/data/2.5/air_pollution?"
+            f"lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}"
+        )
+
+        res = requests.get(current_url, timeout=10)
+        if res.status_code != 200:
+            return None, None, None
+
+        data = res.json()
+        pm25 = data["list"][0]["components"]["pm2_5"]
+        current_aqi = calculate_aqi_from_pm25(pm25)
+
+        forecast_url = (
+            f"http://api.openweathermap.org/data/2.5/air_pollution/forecast?"
+            f"lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}"
+        )
+
+        forecast_res = requests.get(forecast_url, timeout=10)
+
+        if forecast_res.status_code == 200:
+            forecast_data = forecast_res.json()
+            if len(forecast_data["list"]) >= 24:
+                tomorrow_pm25 = forecast_data["list"][24]["components"]["pm2_5"]
+                predicted_aqi = calculate_aqi_from_pm25(tomorrow_pm25)
+            else:
+                predicted_aqi = current_aqi + 5
+        else:
+            predicted_aqi = current_aqi + 5
+
+        city = find_nearest_city(lat, lon)
+        return city, [current_aqi], predicted_aqi
+
+    except Exception as e:
+        print("Error:", e)
+        return None, None, None
+
+
+def find_nearest_city(lat, lon):
+    import math
+    min_dist = float("inf")
+    nearest = "Coimbatore"
+
+    for city, (clat, clon) in CITY_COORDS.items():
+        dist = math.sqrt((lat - clat)**2 + (lon - clon)**2)
+        if dist < min_dist:
+            min_dist = dist
+            nearest = city
+
+    return nearest
